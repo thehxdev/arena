@@ -8,4 +8,4 @@ fi
 
 CFLAGS=(-std=c89 -Wall -Wextra -Wpedantic -Og -g3)
 
-$CC "${CFLAGS[@]}" arena.c main.c
+$CC "${CFLAGS[@]}" arena.c test.c
