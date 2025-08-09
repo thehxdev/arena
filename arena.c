@@ -40,11 +40,13 @@ extern "C" {
     ((void*)((((arena_uintptr_t)(p)) + ((alignment) - 1)) & (~((alignment) - 1))))
 
 
+typedef unsigned char byte;
+
 typedef struct arena_buffer {
     struct arena_buffer *next;
     arena_size_t ptr;
     /* a work-around for zero-sized arrays in C89 */
-    unsigned char buf[1];
+    byte buf[1];
 } arena_buffer_t;
 
 /* A simple macro to cast a pointer to arena_buffer_t.
@@ -87,7 +89,7 @@ int arena_init_(arena_t *arena,
 }
 
 static void *arena_stack_push(arena_t *arena, arena_size_t size, arena_size_t alignment) {
-    void *raw, *aligned;
+    byte *raw, *aligned;
     arena_buffer_t *current, *new_buffer;
     allochdr_t *hdr;
     arena_size_t padding;
@@ -113,11 +115,11 @@ static void *arena_stack_push(arena_t *arena, arena_size_t size, arena_size_t al
         /* reinitialize allocation info */
         raw = current->buf;
         aligned = ALIGN_UP(raw, alignment);
-        padding = (arena_uintptr_t)aligned - (arena_uintptr_t)raw;
+        padding = aligned - raw;
     }
 
     /* store current allocation metadata (header) at the end of the allocation */
-    hdr = (allochdr_t*)((arena_uintptr_t)aligned+size);
+    hdr = (allochdr_t*)(aligned + size);
     hdr->size = size;
     hdr->padding = padding;
 
@@ -153,11 +155,11 @@ void *arena_pop(arena_t *arena) {
     /* reset the current buffer's pointer */
     current->ptr -= hdr.size + hdr.padding;
     /* return the aligned address */
-    return (void*)((arena_uintptr_t)(&current->buf[current->ptr]) + hdr.padding);
+    return (&current->buf[current->ptr]) + hdr.padding;
 }
 
 void *arena_alloc_align(arena_t *arena, arena_size_t size, arena_size_t alignment) {
-    void *raw, *aligned;
+    byte *raw, *aligned;
     arena_buffer_t *current, *new_buffer;
     arena_size_t padding;
 
@@ -187,7 +189,7 @@ void *arena_alloc_align(arena_t *arena, arena_size_t size, arena_size_t alignmen
         current = arena->current;
         raw = &current->buf[current->ptr];
         aligned = ALIGN_UP(raw, alignment);
-        padding = (arena_uintptr_t)aligned - (arena_uintptr_t)raw;
+        padding = aligned - raw;
     }
 
     current->ptr += size + padding;

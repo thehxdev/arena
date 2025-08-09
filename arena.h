@@ -100,7 +100,6 @@ void *arena_alloc_align(arena_t *arena, arena_size_t size, arena_size_t alignmen
 #define arena_alloc(arena, size) \
     arena_alloc_align((arena), (size), (arena)->alignment)
 
-
 /* Get size of last item in arena. Only works if ARENA_STACK flag is specified.
  * Otherwise always returns zero.
  * */
