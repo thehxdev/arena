@@ -96,9 +96,12 @@ int arena_init_(arena_t *arena,
  * be a power of 2 */
 void *arena_alloc_align(arena_t *arena, arena_size_t size, arena_size_t alignment);
 
-/* helper macro to use arena's alignment value for allocations */
+/* Helper macro to use arena's alignment value for allocations */
 #define arena_alloc(arena, size) \
     arena_alloc_align((arena), (size), (arena)->alignment)
+
+/* Is arena empty? May become useful for `pool` implementations. */
+int arena_is_empty(arena_t *arena);
 
 /* Get size of last item in arena. Only works if ARENA_STACK flag is specified.
  * Otherwise always returns zero.

@@ -196,6 +196,12 @@ void *arena_alloc_align(arena_t *arena, arena_size_t size, arena_size_t alignmen
     return aligned;
 }
 
+int arena_is_empty(arena_t *arena) {
+    arena_buffer_t *f;
+    f = b(arena->first);
+    return ((f->next == NULL) && (f->ptr == 0));
+}
+
 static void arena_buffers_free(arena_buffer_t *first, arena_allocator_fn alloc_fn) {
     arena_buffer_t *tmp, *next;
     tmp = first;
