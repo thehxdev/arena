@@ -70,7 +70,7 @@ typedef void*(*arena_allocator_fn)(void *p, arena_size_t size);
 
 enum {
     ARENA_DEFAULT = 0,
-    /* arena will be fixed and now grow in case of space limitation */
+    /* arena will be fixed in size and not grow in case of space limitation */
     ARENA_FIXED   = (1 << 0),
     /* arena will behave like a stack and keeps metadata after each allocation */
     ARENA_STACK   = (1 << 1)
@@ -117,7 +117,7 @@ enum {
     /* if arena has more than one buffer, just reset the last (current) buffer */
     ARENA_RESET_LAST,
     /* if arena has more than one buffer, free those, keep the first buffer and
-     * reset that
+     * just reset it's pointer
      * */
     ARENA_RESET_ALL
 };
