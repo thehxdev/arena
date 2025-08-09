@@ -202,6 +202,10 @@ int arena_is_empty(arena_t *arena) {
     return ((f->next == NULL) && (f->ptr == 0));
 }
 
+arena_size_t arena_pos(arena_t *arena) {
+    return (b(arena->current)->ptr);
+}
+
 static void arena_buffers_free(arena_buffer_t *first, arena_allocator_fn alloc_fn) {
     arena_buffer_t *tmp, *next;
     tmp = first;

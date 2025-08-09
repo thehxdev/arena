@@ -103,6 +103,9 @@ void *arena_alloc_align(arena_t *arena, arena_size_t size, arena_size_t alignmen
 /* Is arena empty? May become useful for `pool` implementations. */
 int arena_is_empty(arena_t *arena);
 
+/* Get current buffer's pointer position */
+arena_size_t arena_pos(arena_t *arena);
+
 /* Get size of last item in arena. Only works if ARENA_STACK flag is specified.
  * Otherwise always returns zero.
  * */
