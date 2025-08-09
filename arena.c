@@ -88,6 +88,7 @@ int arena_init_(arena_t *arena,
     return 1;
 }
 
+#if 0
 static void *arena_stack_push(arena_t *arena, arena_size_t size, arena_size_t alignment) {
     byte *raw, *aligned;
     arena_buffer_t *current, *new_buffer;
@@ -127,6 +128,7 @@ static void *arena_stack_push(arena_t *arena, arena_size_t size, arena_size_t al
     current->ptr += size + padding + ahs;
     return aligned;
 }
+#endif
 
 arena_size_t arena_last_size(arena_t *arena) {
     allochdr_t hdr;
@@ -159,22 +161,24 @@ void *arena_pop(arena_t *arena) {
 }
 
 void *arena_alloc_align(arena_t *arena, arena_size_t size, arena_size_t alignment) {
+    allochdr_t *hdr;
     byte *raw, *aligned;
     arena_buffer_t *current, *new_buffer;
-    arena_size_t padding;
+    arena_size_t padding, required_space;
 
     if (size == 0)
         return NULL;
 
-    if (arena->flags & ARENA_STACK)
-        return arena_stack_push(arena, size, alignment);
-
     current = arena->current;
     raw = &current->buf[current->ptr];
     aligned = ALIGN_UP(raw, alignment);
-    padding = (arena_uintptr_t)aligned - (arena_uintptr_t)raw;
+    padding = aligned - raw;
 
-    if ((size + padding) > (arena->cap - current->ptr)) {
+    required_space = size + padding;
+    if (arena->flags & ARENA_STACK)
+        required_space += ahs;
+
+    if (required_space > (arena->cap - current->ptr)) {
         if (arena->flags & ARENA_FIXED)
             return NULL;
 
@@ -187,9 +191,16 @@ void *arena_alloc_align(arena_t *arena, arena_size_t size, arena_size_t alignmen
 
         /* reinitialize allocation info */
         current = arena->current;
-        raw = &current->buf[current->ptr];
+        raw = current->buf;
         aligned = ALIGN_UP(raw, alignment);
         padding = aligned - raw;
+    }
+
+    if (arena->flags & ARENA_STACK) {
+        hdr = (allochdr_t*)(aligned + size);
+        hdr->size = size;
+        hdr->padding = padding;
+        current->ptr += ahs;
     }
 
     current->ptr += size + padding;
