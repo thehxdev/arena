@@ -45,7 +45,7 @@ typedef unsigned char byte;
 typedef struct arena_buffer {
     struct arena_buffer *next;
     arena_size_t ptr;
-    /* a work-around for zero-sized arrays in C89 */
+    /* a work-around for zero-sized arrays (C99) in C89 */
     byte buf[1];
 } arena_buffer_t;
 
@@ -61,6 +61,9 @@ typedef struct allochdr {
 
 static arena_buffer_t *buffer_new(arena_size_t cap, arena_allocator_fn alloc_fn) {
     arena_buffer_t *b;
+    /* use offsetof instead of sizeof because sizeof will include the padding
+     * at the end of arena_buffer_t and size of the buf field itself
+     * */
     b = alloc_fn(NULL, offsetof(arena_buffer_t, buf) + cap);
     if (!b)
         return NULL;
@@ -87,48 +90,6 @@ int arena_init_(arena_t *arena,
 
     return 1;
 }
-
-#if 0
-static void *arena_stack_push(arena_t *arena, arena_size_t size, arena_size_t alignment) {
-    byte *raw, *aligned;
-    arena_buffer_t *current, *new_buffer;
-    allochdr_t *hdr;
-    arena_size_t padding;
-
-    current = arena->current;
-    raw = &current->buf[current->ptr];
-    aligned = ALIGN_UP(raw, alignment);
-    padding = (arena_uintptr_t)aligned - (arena_uintptr_t)raw;
-
-    /* if there is not enough space left in current buffer, try to allocate a
-     * new one */
-    if ((size + ahs + padding) > (arena->cap - current->ptr)) {
-        if (arena->flags & ARENA_FIXED)
-            return NULL;
-
-        new_buffer = buffer_new(arena->cap, arena->allocator);
-        if (!new_buffer)
-            return NULL;
-
-        B(arena->current)->next = new_buffer;
-        arena->current = new_buffer;
-
-        /* reinitialize allocation info */
-        raw = current->buf;
-        aligned = ALIGN_UP(raw, alignment);
-        padding = aligned - raw;
-    }
-
-    /* store current allocation metadata (header) at the end of the allocation */
-    hdr = (allochdr_t*)(aligned + size);
-    hdr->size = size;
-    hdr->padding = padding;
-
-    /* advance the pointer */
-    current->ptr += size + padding + ahs;
-    return aligned;
-}
-#endif
 
 arena_size_t arena_last_size(arena_t *arena) {
     allochdr_t hdr;
@@ -173,8 +134,11 @@ void *arena_alloc_align(arena_t *arena, arena_size_t size, arena_size_t alignmen
     raw = &current->buf[current->ptr];
     aligned = ALIGN_UP(raw, alignment);
     padding = aligned - raw;
-
     required_space = size + padding;
+
+    /* if ARENA_STACK is set, include allocation header (metadata) in
+     * required_space
+     * */
     if (arena->flags & ARENA_STACK)
         required_space += ahs;
 
@@ -197,6 +161,13 @@ void *arena_alloc_align(arena_t *arena, arena_size_t size, arena_size_t alignmen
     }
 
     if (arena->flags & ARENA_STACK) {
+        /* Store allocation metadata AFTER the allocated block. This approach
+         * is kinda dangerouse because if user overruns the allocated block,
+         * may overwrite the block's metadata. However, this approach makes
+         * stack implementation way easier and more performant!
+         *
+         * FIXME: Find a better way to implement the stack.
+         * */
         hdr = (allochdr_t*)(aligned + size);
         hdr->size = size;
         hdr->padding = padding;

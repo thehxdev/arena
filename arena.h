@@ -79,6 +79,7 @@ typedef struct arena {
     /* all the fields are read-only to the user */
     arena_size_t flags, cap, alignment;
     void *first, *current;
+    /* the allocator is only used to allocate and deallocate arena buffers */
     arena_allocator_fn allocator;
 } arena_t;
 
