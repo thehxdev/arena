@@ -51,7 +51,7 @@ typedef struct arena_buffer {
 
 /* A simple macro to cast a pointer to arena_buffer_t.
  * Use case: less typing :) */
-#define b(p) ((arena_buffer_t*)(p))
+#define B(p) ((arena_buffer_t*)(p))
 
 typedef struct allochdr {
     arena_size_t size;
@@ -109,7 +109,7 @@ static void *arena_stack_push(arena_t *arena, arena_size_t size, arena_size_t al
         if (!new_buffer)
             return NULL;
 
-        b(arena->current)->next = new_buffer;
+        B(arena->current)->next = new_buffer;
         arena->current = new_buffer;
 
         /* reinitialize allocation info */
@@ -131,7 +131,7 @@ static void *arena_stack_push(arena_t *arena, arena_size_t size, arena_size_t al
 arena_size_t arena_last_size(arena_t *arena) {
     allochdr_t hdr;
     arena_buffer_t *current;
-    if (!(arena->flags & ARENA_STACK) || b(arena->current)->ptr == 0)
+    if (!(arena->flags & ARENA_STACK) || B(arena->current)->ptr == 0)
         return 0;
     current = arena->current;
     hdr = *(allochdr_t*) &(current->buf[current->ptr - ahs]);
@@ -182,7 +182,7 @@ void *arena_alloc_align(arena_t *arena, arena_size_t size, arena_size_t alignmen
         if (!new_buffer)
             return NULL;
 
-        b(arena->current)->next = new_buffer;
+        B(arena->current)->next = new_buffer;
         arena->current = new_buffer;
 
         /* reinitialize allocation info */
@@ -198,12 +198,12 @@ void *arena_alloc_align(arena_t *arena, arena_size_t size, arena_size_t alignmen
 
 int arena_is_empty(arena_t *arena) {
     arena_buffer_t *f;
-    f = b(arena->first);
+    f = B(arena->first);
     return ((f->next == NULL) && (f->ptr == 0));
 }
 
 arena_size_t arena_pos(arena_t *arena) {
-    return (b(arena->current)->ptr);
+    return (B(arena->current)->ptr);
 }
 
 static void arena_buffers_free(arena_buffer_t *first, arena_allocator_fn alloc_fn) {
@@ -218,12 +218,12 @@ static void arena_buffers_free(arena_buffer_t *first, arena_allocator_fn alloc_f
 
 void arena_reset(arena_t *arena, int how) {
     if (how == ARENA_RESET_ALL) {
-        arena_buffers_free(b(arena->first)->next, arena->allocator);
-        b(arena->first)->ptr = 0;
-        b(arena->first)->next = NULL;
+        arena_buffers_free(B(arena->first)->next, arena->allocator);
+        B(arena->first)->ptr = 0;
+        B(arena->first)->next = NULL;
         arena->current = arena->first;
     } else {
-        b(arena->current)->ptr = 0;
+        B(arena->current)->ptr = 0;
     }
 }
 
