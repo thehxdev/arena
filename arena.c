@@ -161,13 +161,7 @@ void *arena_alloc_align(arena_t *arena, arena_size_t size, arena_size_t alignmen
     }
 
     if (arena->flags & ARENA_STACK) {
-        /* Store allocation metadata AFTER the allocated block. This approach
-         * is kinda dangerouse because if user overruns the allocated block,
-         * may overwrite the block's metadata. However, this approach makes
-         * stack implementation way easier and more performant!
-         *
-         * FIXME: Find a better way to implement the stack.
-         * */
+        /* Store allocation metadata AFTER the allocated block */
         hdr = (allochdr_t*)(aligned + size);
         hdr->size = size;
         hdr->padding = padding;

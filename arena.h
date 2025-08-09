@@ -72,12 +72,7 @@ enum {
     ARENA_DEFAULT = 0,
     /* arena will be fixed in size and not grow in case of space limitation */
     ARENA_FIXED   = (1 << 0),
-    /* arena will behave like a stack and keeps metadata after each allocation.
-     * FIXME: as of current implementation, keep in mind that every buffer
-     * overrune MAY overwrite that buffer's metadata, because metadata stored
-     * after the allocated block. so be careful of allocated blocks that use
-     * ARENA_STACK option.
-     * */
+    /* arena will behave like a stack and keeps metadata after each allocation. */
     ARENA_STACK   = (1 << 1)
 };
 typedef struct arena {
