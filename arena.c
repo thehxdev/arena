@@ -39,6 +39,17 @@ extern "C" {
 #define ALIGN_UP(p, alignment) \
     ((void*)((((arena_uintptr_t)(p)) + ((alignment) - 1)) & (~((alignment) - 1))))
 
+/*
+ * static_assert implementation in C89 and C99!
+ * learned this from https://github.com/EpicGamesExt/raddebugger
+ */
+#define concat_(A,B) A##B
+#define concat(A,B) concat_(A,B)
+#define static_assert(condition, id) \
+    extern char concat(id, __LINE__)[ ((condition)) ? 1 : -1 ]
+
+/* validate that `arena_uintptr_t` can hold a pointer sized data */
+static_assert((sizeof(arena_uintptr_t) == sizeof(void*)), validate_uintptr_size);
 
 typedef unsigned char byte;
 
