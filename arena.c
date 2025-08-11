@@ -35,9 +35,6 @@ extern "C" {
 #define ALIGN_POW2(num, alignment) \
     ((((arena_uintptr_t)num) + ((alignment) - 1)) & (~((alignment) - 1)))
 
-#define MIN(A,B) (((A)<(B))?(A):(B))
-#define MAX(A,B) (((A)>(B))?(A):(B))
-
 // static_assert implementation in C89 and C99!
 // Learned this from "https://github.com/EpicGamesExt/raddebugger"
 #define CONCAT_(A,B) A##B
