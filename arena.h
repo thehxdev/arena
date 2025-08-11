@@ -1,7 +1,9 @@
 /*
- * Standalone and zero-dependency arena allocator implementation in C89.
+ * Standalone and zero-dependency arena allocator implementation in C99.
  * Repository: https://github.com/thehxdev/arena
  *
+ * The implementation is mostly inspired by the arena implementation in
+ * https://github.com/EpicGamesExt/raddebugger project (MIT License).
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -29,110 +31,103 @@
 extern "C" {
 #endif
 
-#if defined(_WIN32)
-    #include <windows.h>
+#include <stddef.h>
+#include <stdint.h>
 
-    typedef INT_PTR _arena_intptr_t;
-    typedef UINT_PTR _arena_uintptr_t;
-
-    typedef SIZE_T _arena_size_t;
-    typedef SSIZE_T _arena_ssize_t;
-#else
-    typedef long _arena_intptr_t;
-    typedef unsigned long _arena_uintptr_t;
-
-    typedef long _arena_ssize_t;
-    typedef unsigned long _arena_size_t;
-#endif
-
-#define arena_uintptr_t _arena_uintptr_t
-#define arena_intptr_t  _arena_intptr_t
-#define arena_size_t    _arena_size_t
-#define arena_ssize_t   _arena_ssize_t
-
-#if 0
-void *example_allocator(void *p, unsigned long size) {
-    if (size == 0)
-        free(p);
-    return malloc(size);
-}
-#endif
-/*
- * The allocator function MUST behave like the example_allocator that described
- * above. There is no re-allocation in this library, but one practical example
- * of such an allocator is glibc's `realloc` function.
- */
-typedef void*(*arena_allocator_fn)(void *p, arena_size_t size);
+#define arena_intptr_t  intptr_t
+#define arena_uintptr_t uintptr_t    
+#define arena_size_t    size_t
 
 #ifndef ARENA_DEFAULT_ALIGNMENT
     #define ARENA_DEFAULT_ALIGNMENT sizeof(arena_uintptr_t)
 #endif
 
 enum {
-    ARENA_DEFAULT = 0,
-    /* arena will be fixed in size and not grow in case of space limitation */
-    ARENA_FIXED   = (1 << 0),
-    /* arena will behave like a stack and keeps metadata after each allocation. */
-    ARENA_STACK   = (1 << 1)
+    ARENA_NONE = 0,
+    // arena will be fixed in size and not grow in case of space limitation
+    ARENA_FIXED = (1 << 0),
+    // use large pages
+    ARENA_LARGPAGES = (1 << 1),
+
+    // arena will behave like a stack and keeps metadata after each allocation.
+    // ARENA_STACK = (1 << 2),
 };
+
+typedef struct arena_config {
+    // the "reserve" and "commit" fields will be aligned by operating system's
+    // page size
+    arena_size_t reserve, commit, alignment, flags;
+} arena_config_t;
+
 typedef struct arena {
-    /* all the fields are read-only to the user */
-    arena_size_t flags, cap, alignment;
-    void *first, *current;
-    /* the allocator is only used to allocate and deallocate arena buffers */
-    arena_allocator_fn allocator;
+    // all the fields are read-only to the user
+    arena_config_t config;
+    struct arena *prev, *current;
+    // the "pos_base" field helps to track all the memory allocated and helps
+    // to view the arena as a single buffer even with multiple buffers
+    arena_size_t pos, pos_base, reserved, commited;
+    unsigned char buf[0];
 } arena_t;
 
-int arena_init_(arena_t *arena,
-                arena_size_t cap,
-                arena_size_t alignment,
-                arena_allocator_fn alloc_fn,
-                arena_size_t flags);
+// by using scopes you can take a snapshot from an existing arena, use that and
+// restore the old state.
+typedef struct arena_scope {
+    arena_t *arena;
+    arena_size_t __pos; // read-only
+} arena_scope_t;
 
-/* helper macro to use default alignment value for arena allocations */
-#define arena_init(arena, cap, alloc_fn, flags) \
-    arena_init_((arena), (cap), ARENA_DEFAULT_ALIGNMENT, (alloc_fn), (flags))
+#define ARENA_KB(value) ((value) * 1024)
+#define ARENA_MB(value) (ARENA_KB(value) * 1024)
+#define ARENA_GB(value) (ARENA_MB(value) * 1024)
 
-/* Allocate memory on arena with specified alignment. The alignment value  MUST
- * be a power of 2 */
-void *arena_alloc_align(arena_t *arena, arena_size_t size, arena_size_t alignment);
+#define ARENA_DEFAULT_RESERVE_SIZE ARENA_MB(16)
+#define ARENA_DEFAULT_COMMIT_SIZE  ARENA_KB(16)
 
-/* Helper macro to use arena's alignment value for allocations */
-#define arena_alloc(arena, size) \
-    arena_alloc_align((arena), (size), (arena)->alignment)
+#define ARENA_DEFAULT_CONFIG \
+    ((arena_config_t){ \
+        .reserve = ARENA_DEFAULT_RESERVE_SIZE, \
+        .commit = ARENA_DEFAULT_COMMIT_SIZE, \
+        .alignment = ARENA_DEFAULT_ALIGNMENT, \
+        .flags = ARENA_NONE \
+    })
 
-/* Is arena empty? May become useful for `pool` implementations. */
-int arena_is_empty(arena_t *arena);
-
-/* Get current buffer's pointer position */
-arena_size_t arena_pos(arena_t *arena);
-
-/* Get size of last item in arena. Only works if ARENA_STACK flag is specified.
- * Otherwise always returns zero.
- * */
-arena_size_t arena_last_size(arena_t *arena);
-
-/* Get a pointer to last item and remove that from stack. Pushing new items
- * will overwrite it's data so user MUST copy data befor ANY new push
- * operation. Only works if ARENA_STACK flag is specified. Otherwise returns
- * NULL does nothing.
- * */
-void *arena_pop(arena_t *arena);
-
-enum {
-    /* if arena has more than one buffer, just reset the last (current) buffer */
-    ARENA_RESET_LAST,
-    /* if arena has more than one buffer, free those, keep the first buffer and
-     * just reset it's pointer
-     * */
-    ARENA_RESET_ALL
-};
-void arena_reset(arena_t *arena, int how);
+arena_t *arena_new(arena_config_t *config);
 
 void arena_deinit(arena_t *arena);
+
+// Allocate memory on arena with specified alignment. The alignment value  MUST
+// be a power of 2
+void *arena_alloc_align(arena_t *arena, arena_size_t size, arena_size_t alignment);
+
+// Helper macro to use arena's alignment value for allocations
+#define arena_alloc(arena, size) \
+    arena_alloc_align((arena), (size), (arena)->config.alignment)
+
+// Is arena empty?
+int arena_is_empty(arena_t *arena);
+
+// Get total bytes allocated
+arena_size_t arena_pos(arena_t *arena);
+
+// Set arena's position to a position specified by pos
+void arena_pop_to(arena_t *arena, arena_size_t pos);
+
+// Seek back arena's pointer by offset.
+void arena_pop(arena_t *arena, arena_size_t offset);
+
+// Reset the arena. If the arena had more that one buffer, free all of them and
+// just keep the first buffer and also reset that.
+void arena_reset(arena_t *arena);
+
+// take a snapshot from an arena, use that and restore the old state with
+// arena_scope_end function.
+arena_scope_t arena_scope_begin(arena_t *arena);
+
+// restore an arena's state from an snapshot.
+void arena_scope_end(arena_scope_t scope);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* _ARENA_H_ */
+#endif // _ARENA_H_

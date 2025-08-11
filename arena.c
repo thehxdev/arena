@@ -1,7 +1,9 @@
 /*
- * Standalone and zero-dependency arena allocator implementation in C89.
+ * Standalone and zero-dependency arena allocator implementation in C99.
  * Repository: https://github.com/thehxdev/arena
  *
+ * The implementation is mostly inspired by the arena implementation in
+ * https://github.com/EpicGamesExt/raddebugger project (MIT License).
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -26,196 +28,269 @@
 extern "C" {
 #endif
 
+#include <string.h>
 #include "arena.h"
 
-#ifndef NULL
-    #define NULL ((void*)0)
-#endif
+// align up a number to a power-of-2 alignment
+#define ALIGN_POW2(num, alignment) \
+    ((((arena_uintptr_t)num) + ((alignment) - 1)) & (~((alignment) - 1)))
 
-#ifndef offsetof
-    #define offsetof(_type, _field) ((arena_size_t)(&(((_type*)NULL)->_field)))
-#endif
+#define MIN(A,B) (((A)<(B))?(A):(B))
+#define MAX(A,B) (((A)>(B))?(A):(B))
 
-#define ALIGN_UP(p, alignment) \
-    ((void*)((((arena_uintptr_t)(p)) + ((alignment) - 1)) & (~((alignment) - 1))))
-
-/*
- * static_assert implementation in C89 and C99!
- * learned this from https://github.com/EpicGamesExt/raddebugger
- */
-#define concat_(A,B) A##B
-#define concat(A,B) concat_(A,B)
+// static_assert implementation in C89 and C99!
+// Learned this from "https://github.com/EpicGamesExt/raddebugger"
+#define CONCAT_(A,B) A##B
+#define CONCAT(A,B) CONCAT_(A,B)
 #define static_assert(condition, id) \
-    extern char concat(id, __LINE__)[ ((condition)) ? 1 : -1 ]
+    extern char CONCAT(id, __LINE__)[ ((condition)) ? 1 : -1 ]
 
-/* validate that `arena_uintptr_t` can hold a pointer sized data */
+// validate that `arena_uintptr_t` can hold a pointer
 static_assert((sizeof(arena_uintptr_t) == sizeof(void*)), validate_uintptr_size);
+
+
+#if defined(__linux__) /* linux */ \
+    || (defined(__APPLE__) && defined(__MACH__)) /* apple */ \
+    || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) /* bsd */
+
+    // unix-like platforms
+    #define ARENA_PLAT_UNIX
+    #include <sys/mman.h>
+    #include <unistd.h>
+
+#elif defined(_WIN32) || defined(_WIN64)
+
+    // windows platform
+    #define ARENA_PLAT_WINDOWS
+    #include <windows.h>
+    #include <memoryapi.h>
+    #include <sysinfoapi.h>
+
+#else // not unix-like nor windows
+    #error "unsupported platform"
+#endif
 
 typedef unsigned char byte;
 
-typedef struct arena_buffer {
-    struct arena_buffer *next;
-    arena_size_t ptr;
-    /* a work-around for zero-sized arrays (C99) in C89 */
-    byte buf[1];
-} arena_buffer_t;
+// typedef struct allochdr {
+//     arena_size_t size;
+//     arena_size_t padding;
+// } allochdr_t;
+// #define ahs (sizeof(allochdr_t))
 
-/* A simple macro to cast a pointer to arena_buffer_t.
- * Use case: less typing :) */
-#define B(p) ((arena_buffer_t*)(p))
+// ask operating system for memory
+static void *os_reserve(arena_size_t size, int with_large_pages) {
+    void *p; int wlp;
+    #ifdef ARENA_PLAT_UNIX
+    wlp = (with_large_pages) ? MAP_HUGETLB : 0;
+    p = mmap(NULL, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | wlp, -1, 0);
+    if (p == MAP_FAILED)
+        p = NULL;
+    #else
+    wlp = (with_large_pages) ? (MEM_COMMIT | MEM_LARGE_PAGES) : 0;
+    p = VirtualAlloc(NULL, size, MEM_RESERVE | wlp, PAGE_READWRITE);
+    #endif
+    return p;
+}
 
-typedef struct allochdr {
-    arena_size_t size;
-    arena_size_t padding;
-} allochdr_t;
-#define ahs (sizeof(allochdr_t))
+// commit a page (prepare it for read/write)
+static int os_commit(void *p, arena_size_t size, int with_large_pages) {
+    #ifdef ARENA_PLAT_UNIX
+    (void)with_large_pages;
+    return (mprotect(p, size, PROT_READ | PROT_WRITE) == 0);
+    #else
+    if (with_large_pages)
+        return 1;
+    return (VirtualAlloc(ptr, size, MEM_COMMIT, PAGE_READWRITE) != 0);
+    #endif
+}
 
-static arena_buffer_t *buffer_new(arena_size_t cap, arena_allocator_fn alloc_fn) {
-    arena_buffer_t *b;
-    /* use offsetof instead of sizeof because sizeof will include the padding
-     * at the end of arena_buffer_t and size of the buf field itself
-     * */
-    b = alloc_fn(NULL, offsetof(arena_buffer_t, buf) + cap);
-    if (!b)
+// release an allocated memory block
+static void os_release(void *p, arena_size_t size) {
+    #ifdef ARENA_PLAT_UNIX
+    munmap(p, size);
+    #else
+    (void)size;
+    VirtualFree(p, 0, MEM_RELEASE);
+    #endif
+}
+
+static inline arena_size_t os_get_pagesize(void) {
+    #ifdef ARENA_PLAT_UNIX
+    return sysconf(_SC_PAGESIZE);
+    #else
+    SYSTEM_INFO sysinfo;
+    memset(&sysinfo, 0, sizeof(sysinfo));
+    GetSystemInfo(&sysinfo);
+    return sysinfo.dwPageSize;
+    #endif
+}
+
+static inline arena_size_t os_get_largepagesize(void) {
+    #ifdef ARENA_PLAT_UNIX
+    // 2 MB is a safe value for linux and most BSD systems
+    return ARENA_MB(2);
+    #else
+    return GetLargePageMinimum();
+    #endif
+}
+
+arena_t *arena_new(arena_config_t *config) {
+    arena_t *a;
+    arena_size_t pagesize, reserve, commit;
+    int lp = config->flags & ARENA_LARGPAGES;
+
+    pagesize = (lp) ? os_get_largepagesize() : os_get_pagesize();
+
+    // align reserve and commit fields by operating system's page size
+    reserve = ALIGN_POW2(config->reserve, pagesize);
+    commit = ALIGN_POW2(config->commit, pagesize);
+
+    a = os_reserve(reserve, lp);
+    if (!a)
         return NULL;
-    b->ptr = 0;
-    b->next = NULL;
-    return b;
-}
-
-int arena_init_(arena_t *arena,
-                arena_size_t cap,
-                arena_size_t alignment,
-                arena_allocator_fn alloc_fn,
-                arena_size_t flags)
-{
-    arena->first = buffer_new(cap, alloc_fn);
-    if (!arena->first)
-        return 0;
-    arena->current = arena->first;
-
-    arena->flags = flags;
-    arena->alignment = alignment;
-    arena->allocator = alloc_fn;
-    arena->cap = cap;
-
-    return 1;
-}
-
-arena_size_t arena_last_size(arena_t *arena) {
-    allochdr_t hdr;
-    arena_buffer_t *current;
-    if (!(arena->flags & ARENA_STACK) || B(arena->current)->ptr == 0)
-        return 0;
-    current = arena->current;
-    hdr = *(allochdr_t*) &(current->buf[current->ptr - ahs]);
-    return hdr.size;
-}
-
-void *arena_pop(arena_t *arena) {
-    allochdr_t hdr;
-    arena_buffer_t *current;
-
-    current = arena->current;
-
-    if (!(arena->flags & ARENA_STACK) || current->ptr == 0)
+    if (!os_commit(a, commit, lp)) {
+        os_release(a, reserve);
         return NULL;
+    }
 
-    /* set ptr to header location */
-    current->ptr -= ahs;
+    memcpy(&a->config, config, sizeof(*config));
 
-    /* read the allocation header */
-    hdr = *(allochdr_t*) &(current->buf[current->ptr]);
-    /* reset the current buffer's pointer */
-    current->ptr -= hdr.size + hdr.padding;
-    /* return the aligned address */
-    return (&current->buf[current->ptr]) + hdr.padding;
+    // store aligned values
+    a->config.reserve = reserve;
+    a->config.commit  = commit;
+    a->commited = commit;
+    a->reserved = reserve;
+
+    a->pos_base = 0;
+    a->pos = 0;
+    a->prev = NULL;
+    a->current = a;
+
+    return a;
 }
 
 void *arena_alloc_align(arena_t *arena, arena_size_t size, arena_size_t alignment) {
-    allochdr_t *hdr;
+    // allochdr_t *hdr;
     byte *raw, *aligned;
-    arena_buffer_t *current, *new_buffer;
-    arena_size_t padding, required_space;
+    arena_t *current, *new_arena;
+    arena_size_t padding;
 
     if (size == 0)
         return NULL;
 
     current = arena->current;
-    raw = &current->buf[current->ptr];
-    aligned = ALIGN_UP(raw, alignment);
+    raw = &current->buf[current->pos];
+    aligned = (void*) ALIGN_POW2(raw, alignment);
     padding = aligned - raw;
-    required_space = size + padding;
 
-    /* if ARENA_STACK is set, include allocation header (metadata) in
-     * required_space
-     * */
-    if (arena->flags & ARENA_STACK)
-        required_space += ahs;
+    // if ARENA_STACK is set, include allocation header (metadata) in
+    // required_space
+    // if (current->config.flags & ARENA_STACK)
+    //     required_space += ahs;
 
-    if (required_space > (arena->cap - current->ptr)) {
-        if (arena->flags & ARENA_FIXED)
+    if ((size + padding) > (current->reserved - current->pos)) {
+        if (current->config.flags & ARENA_FIXED)
             return NULL;
 
-        new_buffer = buffer_new(arena->cap, arena->allocator);
-        if (!new_buffer)
+        if ( !(new_arena = arena_new(&current->config)))
             return NULL;
 
-        B(arena->current)->next = new_buffer;
-        arena->current = new_buffer;
+        new_arena->pos_base = current->pos_base + current->reserved;
+        new_arena->prev = current;
+        arena->current = new_arena;
 
-        /* reinitialize allocation info */
-        current = arena->current;
+        // reinitialize allocation info
+        current = new_arena;
         raw = current->buf;
-        aligned = ALIGN_UP(raw, alignment);
+        aligned = (void*) ALIGN_POW2(raw, alignment);
         padding = aligned - raw;
     }
 
-    if (arena->flags & ARENA_STACK) {
-        /* Store allocation metadata AFTER the allocated block */
-        hdr = (allochdr_t*)(aligned + size);
-        hdr->size = size;
-        hdr->padding = padding;
-        current->ptr += ahs;
+    // if (current->config.flags & ARENA_STACK) {
+    //     // Store allocation metadata AFTER the allocated block
+    //     hdr = (allochdr_t*)(aligned + size);
+    //     hdr->size = size;
+    //     hdr->padding = padding;
+    //     current->pos += ahs;
+    // }
+    current->pos += size + padding;
+
+    // commit new pages if needed
+    if (current->pos > current->commited) {
+        // Since "reserve" and "commit" fields in arena config are already
+        // aligned by operating system's page size, the "commit" field is
+        // divisible by "reserve" field. So we can divied the arena's buffer to
+        // blocks with "commit" size each.
+        os_commit(&current->buf[current->commited],
+                  current->config.commit,
+                  current->config.flags & ARENA_LARGPAGES);
+        current->commited += current->config.commit;
     }
 
-    current->ptr += size + padding;
     return aligned;
 }
 
-int arena_is_empty(arena_t *arena) {
-    arena_buffer_t *f;
-    f = B(arena->first);
-    return ((f->next == NULL) && (f->ptr == 0));
-}
-
 arena_size_t arena_pos(arena_t *arena) {
-    return (B(arena->current)->ptr);
+    return (arena->current->pos_base + arena->current->pos);
 }
 
-static void arena_buffers_free(arena_buffer_t *first, arena_allocator_fn alloc_fn) {
-    arena_buffer_t *tmp, *next;
-    tmp = first;
-    while (tmp) {
-        next = tmp->next;
-        alloc_fn(tmp, 0);
-        tmp = next;
-    }
+int arena_is_empty(arena_t *arena) {
+    return ((arena->current->prev == NULL) && (arena->pos == 0));
 }
 
-void arena_reset(arena_t *arena, int how) {
-    if (how == ARENA_RESET_ALL) {
-        arena_buffers_free(B(arena->first)->next, arena->allocator);
-        B(arena->first)->ptr = 0;
-        B(arena->first)->next = NULL;
-        arena->current = arena->first;
-    } else {
-        B(arena->current)->ptr = 0;
+void arena_pop_to(arena_t *arena, arena_size_t pos) {
+    arena_t *current = arena->current, *prev = NULL;
+    while (current->pos_base > pos) {
+        prev = current->prev;
+        os_release(current, current->reserved);
+        current = prev;
     }
+    arena->current = current;
+    current->pos = pos - current->pos_base;
+}
+
+void arena_pop(arena_t *arena, arena_size_t offset) {
+    // allochdr_t hdr;
+    // arena_t *current;
+
+    arena_size_t pos_curr = arena_pos(arena);
+
+    // if (arena->config.flags & ARENA_STACK) {
+    //     current = arena->current;
+    //     offset = ahs;
+    //     hdr = *(allochdr_t*) &current->buf[pos_curr - ahs];
+    //     offset += hdr.size + hdr.padding;
+    // }
+    if (offset <= pos_curr)
+        arena_pop_to(arena, pos_curr - offset);
+}
+
+void arena_reset(arena_t *arena) {
+    arena_pop_to(arena, 0);
+    arena->current->pos = 0;
+    arena->current->prev = NULL;
 }
 
 void arena_deinit(arena_t *arena) {
-    arena_buffers_free(arena->first, arena->allocator);
+    arena_t *current, *prev;
+    current = arena->current;
+    while (current) {
+        prev = current->prev;
+        os_release(current, current->reserved);
+        current = prev;
+    }
+}
+
+arena_scope_t arena_scope_begin(arena_t *arena) {
+    return ((arena_scope_t){
+        .arena = arena,
+        .__pos = arena_pos(arena),
+    });
+}
+
+void arena_scope_end(arena_scope_t scope) {
+    arena_pop_to(scope.arena, scope.__pos);
 }
 
 #ifdef __cplusplus

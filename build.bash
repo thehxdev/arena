@@ -6,6 +6,6 @@ if [[ -z "$CC" ]]; then
     CC=cc
 fi
 
-CFLAGS=(-std=c89 -Wall -Wextra -Wpedantic -Og -g3)
+CFLAGS=(-std=c99 -Wall -Wextra -Og -g3)
 
 $CC "${CFLAGS[@]}" arena.c test.c
