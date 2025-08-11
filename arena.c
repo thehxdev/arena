@@ -163,7 +163,7 @@ arena_t *arena_new(arena_config_t *config) {
     a->reserved = reserve;
 
     a->pos_base = 0;
-    a->pos = 0;
+    a->pos = sizeof(*a);
     a->prev = NULL;
     a->current = a;
 
@@ -180,7 +180,7 @@ void *arena_alloc_align(arena_t *arena, arena_size_t size, arena_size_t alignmen
         return NULL;
 
     current = arena->current;
-    raw = &current->buf[current->pos];
+    raw = (byte*)current + current->pos;
     aligned = (void*) ALIGN_POW2(raw, alignment);
     padding = aligned - raw;
 
@@ -202,7 +202,7 @@ void *arena_alloc_align(arena_t *arena, arena_size_t size, arena_size_t alignmen
 
         // reinitialize allocation info
         current = new_arena;
-        raw = current->buf;
+        raw = (byte*)current + current->pos;
         aligned = (void*) ALIGN_POW2(raw, alignment);
         padding = aligned - raw;
     }
@@ -222,7 +222,7 @@ void *arena_alloc_align(arena_t *arena, arena_size_t size, arena_size_t alignmen
         // aligned by operating system's page size, the "commit" field is
         // divisible by "reserve" field. So we can divied the arena's buffer to
         // blocks with "commit" size each.
-        os_commit(&current->buf[current->commited],
+        os_commit((byte*)current + current->commited,
                   current->config.commit,
                   current->config.flags & ARENA_LARGPAGES);
         current->commited += current->config.commit;
