@@ -2,8 +2,6 @@
 #include <assert.h>
 #include "arena.h"
 
-/* FIXME: This test is not complete! */
-
 int main(void) {
     arena_t *a;
     long *p, *z;
@@ -24,7 +22,6 @@ int main(void) {
     printf("value = %ld\n", *p);
 
     assert(p == z);
-
     arena_deinit(a);
     return 0;
 }

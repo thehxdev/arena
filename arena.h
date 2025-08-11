@@ -66,7 +66,6 @@ typedef struct arena {
     // the "pos_base" field helps to track all the memory allocated and helps
     // to view the arena as a single buffer even with multiple buffers
     arena_size_t pos, pos_base, reserved, commited;
-    // unsigned char buf[0];
 } arena_t;
 
 // by using scopes you can take a snapshot from an existing arena, use that and
