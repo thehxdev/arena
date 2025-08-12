@@ -51,7 +51,7 @@ int main(void) {
     pool_t p;
     pool_init(&p, sizeof(long));
 
-    long *i = pool_get(&p);
+    long *i = (long*) pool_get(&p);
     *i = 0xBabaAbDad; // :)
 
     printf("%#lX\n", *i);

@@ -37,13 +37,13 @@ extern "C" {
 
 // static_assert implementation in C89 and C99!
 // Learned this from "https://github.com/EpicGamesExt/raddebugger"
-#define CONCAT_(A,B) A##B
-#define CONCAT(A,B) CONCAT_(A,B)
-#define static_assert(condition, id) \
-    extern char CONCAT(id, __LINE__)[ ((condition)) ? 1 : -1 ]
+#define __arena_concat_(A,B) A##B
+#define __arena_concat(A,B) __arena_concat_(A,B)
+#define __arena_static_assert(condition, id) \
+    extern char __arena_concat(id, __LINE__)[ ((condition)) ? 1 : -1 ]
 
 // validate that `arena_uintptr_t` can hold a pointer
-static_assert((sizeof(arena_uintptr_t) == sizeof(void*)), validate_uintptr_size);
+__arena_static_assert((sizeof(arena_uintptr_t) == sizeof(void*)), validate_uintptr_size);
 
 
 #if defined(__linux__) /* linux */ \
@@ -141,7 +141,7 @@ arena_t *arena_new(arena_config_t *config) {
     reserve = ALIGN_POW2(config->reserve, pagesize);
     commit = ALIGN_POW2(config->commit, pagesize);
 
-    a = os_reserve(reserve, lp);
+    a = (arena_t*) os_reserve(reserve, lp);
     if (!a)
         return NULL;
     if (!os_commit(a, commit, lp)) {
@@ -176,7 +176,7 @@ void *arena_alloc_align(arena_t *arena, arena_size_t size, arena_size_t alignmen
 
     current = arena->current;
     raw = (unsigned char*)current + current->pos;
-    aligned = (void*) ALIGN_POW2(raw, alignment);
+    aligned = (unsigned char*) ALIGN_POW2(raw, alignment);
     padding = aligned - raw;
 
     // if ARENA_STACK is set, include allocation header (metadata) in
@@ -198,7 +198,7 @@ void *arena_alloc_align(arena_t *arena, arena_size_t size, arena_size_t alignmen
         // reinitialize allocation info
         current = new_arena;
         raw = (unsigned char*)current + current->pos;
-        aligned = (void*) ALIGN_POW2(raw, alignment);
+        aligned = (unsigned char*) ALIGN_POW2(raw, alignment);
         padding = aligned - raw;
     }
 

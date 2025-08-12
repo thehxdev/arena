@@ -13,12 +13,12 @@ int main(void) {
         return 1;
     }
 
-    p = arena_alloc(a, sizeof(*p));
+    p = (long*) arena_alloc(a, sizeof(*p));
     *p = 111;
 
     arena_pop(a, sizeof(*p));
 
-    z = arena_alloc(a, sizeof(*z));
+    z = (long*) arena_alloc(a, sizeof(*z));
     printf("value = %ld\n", *p);
 
     assert(p == z);
