@@ -279,11 +279,9 @@ void arena_deinit(arena_t *arena) {
     }
 }
 
-arena_scope_t arena_scope_begin(arena_t *arena) {
-    return ((arena_scope_t){
-        .arena = arena,
-        .__pos = arena_pos(arena),
-    });
+void arena_scope_begin(arena_t *arena, arena_scope_t *scope_out) {
+    scope_out->arena = arena;
+    scope_out->__pos   = arena_pos(arena);
 }
 
 void arena_scope_end(arena_scope_t scope) {

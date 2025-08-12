@@ -118,11 +118,11 @@ void arena_pop(arena_t *arena, arena_size_t offset);
 // just keep the first buffer and also reset that.
 void arena_reset(arena_t *arena);
 
-// take a snapshot from an arena, use that and restore the old state with
-// arena_scope_end function.
-arena_scope_t arena_scope_begin(arena_t *arena);
+// Take a snapshot from an arena, use that and restore the old state with
+// arena_scope_end function. This function writes data to scope_out.
+void arena_scope_begin(arena_t *arena, arena_scope_t *scope_out);
 
-// restore an arena's state from an snapshot.
+// Restore an arena's state from an snapshot.
 void arena_scope_end(arena_scope_t scope);
 
 #ifdef __cplusplus
