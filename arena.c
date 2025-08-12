@@ -67,8 +67,6 @@ static_assert((sizeof(arena_uintptr_t) == sizeof(void*)), validate_uintptr_size)
     #error "unsupported platform"
 #endif
 
-typedef unsigned char byte;
-
 // typedef struct allochdr {
 //     arena_size_t size;
 //     arena_size_t padding;
@@ -169,7 +167,7 @@ arena_t *arena_new(arena_config_t *config) {
 
 void *arena_alloc_align(arena_t *arena, arena_size_t size, arena_size_t alignment) {
     // allochdr_t *hdr;
-    byte *raw, *aligned;
+    unsigned char *raw, *aligned;
     arena_t *current, *new_arena;
     arena_size_t padding;
 
@@ -177,7 +175,7 @@ void *arena_alloc_align(arena_t *arena, arena_size_t size, arena_size_t alignmen
         return NULL;
 
     current = arena->current;
-    raw = (byte*)current + current->pos;
+    raw = (unsigned char*)current + current->pos;
     aligned = (void*) ALIGN_POW2(raw, alignment);
     padding = aligned - raw;
 
@@ -199,7 +197,7 @@ void *arena_alloc_align(arena_t *arena, arena_size_t size, arena_size_t alignmen
 
         // reinitialize allocation info
         current = new_arena;
-        raw = (byte*)current + current->pos;
+        raw = (unsigned char*)current + current->pos;
         aligned = (void*) ALIGN_POW2(raw, alignment);
         padding = aligned - raw;
     }
@@ -219,7 +217,7 @@ void *arena_alloc_align(arena_t *arena, arena_size_t size, arena_size_t alignmen
         // aligned by operating system's page size, the "commit" field is
         // divisible by "reserve" field. So we can divied the arena's buffer to
         // blocks with "commit" size each.
-        os_commit((byte*)current + current->commited,
+        os_commit((unsigned char*)current + current->commited,
                   current->config.commit,
                   current->config.flags & ARENA_LARGPAGES);
         current->commited += current->config.commit;
