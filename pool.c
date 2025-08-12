@@ -28,8 +28,8 @@ void pool_init(pool_t *p, size_t chunksize) {
     };
 }
 
-void pool_deinit(pool_t *p) {
-    arena_deinit(p->arena);
+void pool_destroy(pool_t *p) {
+    arena_destroy(p->arena);
 }
 
 void *pool_get(pool_t *self) {
@@ -57,6 +57,6 @@ int main(void) {
     printf("%#lX\n", *i);
     pool_put(&p, i);
 
-    pool_deinit(&p);
+    pool_destroy(&p);
     return 0;
 }

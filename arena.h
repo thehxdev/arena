@@ -35,7 +35,7 @@ extern "C" {
 #include <stdint.h>
 
 #define arena_intptr_t  intptr_t
-#define arena_uintptr_t uintptr_t    
+#define arena_uintptr_t uintptr_t
 #define arena_size_t    size_t
 
 #ifndef ARENA_DEFAULT_ALIGNMENT
@@ -92,7 +92,7 @@ typedef struct arena_scope {
 
 arena_t *arena_new(arena_config_t *config);
 
-void arena_deinit(arena_t *arena);
+void arena_destroy(arena_t *arena);
 
 // Allocate memory on arena with specified alignment. The alignment value  MUST
 // be a power of 2

@@ -269,7 +269,7 @@ void arena_reset(arena_t *arena) {
     arena->current->prev = NULL;
 }
 
-void arena_deinit(arena_t *arena) {
+void arena_destroy(arena_t *arena) {
     arena_t *current, *prev;
     current = arena->current;
     while (current) {

@@ -22,6 +22,6 @@ int main(void) {
     printf("value = %ld\n", *p);
 
     assert(p == z);
-    arena_deinit(a);
+    arena_destroy(a);
     return 0;
 }
