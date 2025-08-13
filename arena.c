@@ -76,58 +76,58 @@ __arena_static_assert((sizeof(arena_uintptr_t) == sizeof(void*)), validate_uintp
 // ask operating system for memory
 static void *os_reserve(arena_size_t size, int with_large_pages) {
     void *p; int wlp;
-    #ifdef ARENA_PLAT_UNIX
+#ifdef ARENA_PLAT_UNIX
     wlp = (with_large_pages) ? MAP_HUGETLB : 0;
     p = mmap(NULL, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | wlp, -1, 0);
     if (p == MAP_FAILED)
         p = NULL;
-    #else
+#else
     wlp = (with_large_pages) ? (MEM_COMMIT | MEM_LARGE_PAGES) : 0;
     p = VirtualAlloc(NULL, size, MEM_RESERVE | wlp, PAGE_READWRITE);
-    #endif
+#endif
     return p;
 }
 
 // commit a page (prepare it for read/write)
 static int os_commit(void *p, arena_size_t size, int with_large_pages) {
-    #ifdef ARENA_PLAT_UNIX
+#ifdef ARENA_PLAT_UNIX
     (void)with_large_pages;
     return (mprotect(p, size, PROT_READ | PROT_WRITE) == 0);
-    #else
+#else
     if (with_large_pages)
         return 1;
     return (VirtualAlloc(ptr, size, MEM_COMMIT, PAGE_READWRITE) != 0);
-    #endif
+#endif
 }
 
-// release an allocated memory block
+// release an reserved memory block
 static void os_release(void *p, arena_size_t size) {
-    #ifdef ARENA_PLAT_UNIX
+#ifdef ARENA_PLAT_UNIX
     munmap(p, size);
-    #else
+#else
     (void)size;
     VirtualFree(p, 0, MEM_RELEASE);
-    #endif
+#endif
 }
 
 static inline arena_size_t os_get_pagesize(void) {
-    #ifdef ARENA_PLAT_UNIX
+#ifdef ARENA_PLAT_UNIX
     return sysconf(_SC_PAGESIZE);
-    #else
+#else
     SYSTEM_INFO sysinfo;
     memset(&sysinfo, 0, sizeof(sysinfo));
     GetSystemInfo(&sysinfo);
     return sysinfo.dwPageSize;
-    #endif
+#endif
 }
 
 static inline arena_size_t os_get_largepagesize(void) {
-    #ifdef ARENA_PLAT_UNIX
-    // 2 MB is a safe value for linux and most BSD systems
+#ifdef ARENA_PLAT_UNIX
+    // 2 MB is a safe value for Linux and most BSD systems
     return ARENA_MB(2);
-    #else
+#else
     return GetLargePageMinimum();
-    #endif
+#endif
 }
 
 arena_t *arena_new(arena_config_t *config) {
