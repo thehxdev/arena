@@ -48,9 +48,6 @@ enum {
     ARENA_FIXED = (1 << 0),
     // use large pages
     ARENA_LARGPAGES = (1 << 1),
-
-    // arena will behave like a stack and keeps metadata after each allocation.
-    // ARENA_STACK = (1 << 2),
 };
 
 typedef struct arena_config {

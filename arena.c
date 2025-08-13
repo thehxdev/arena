@@ -32,7 +32,7 @@ extern "C" {
 #include "arena.h"
 
 // align up a number to a power-of-2 alignment
-#define ALIGN_POW2(num, alignment) \
+#define arena_align_pow2(num, alignment) \
     ((((arena_uintptr_t)num) + ((alignment) - 1)) & (~((alignment) - 1)))
 
 // static_assert implementation in C89 and C99!
@@ -67,14 +67,8 @@ __arena_static_assert((sizeof(arena_uintptr_t) == sizeof(void*)), validate_uintp
     #error "unsupported platform"
 #endif
 
-// typedef struct allochdr {
-//     arena_size_t size;
-//     arena_size_t padding;
-// } allochdr_t;
-// #define ahs (sizeof(allochdr_t))
-
 // ask operating system for memory
-static void *os_reserve(arena_size_t size, int with_large_pages) {
+static void *arena_os_reserve(arena_size_t size, int with_large_pages) {
     void *p; int wlp;
 #ifdef ARENA_PLAT_UNIX
     wlp = (with_large_pages) ? MAP_HUGETLB : 0;
@@ -89,7 +83,7 @@ static void *os_reserve(arena_size_t size, int with_large_pages) {
 }
 
 // commit a page (prepare it for read/write)
-static int os_commit(void *p, arena_size_t size, int with_large_pages) {
+static int arena_os_commit(void *p, arena_size_t size, int with_large_pages) {
 #ifdef ARENA_PLAT_UNIX
     (void)with_large_pages;
     return (mprotect(p, size, PROT_READ | PROT_WRITE) == 0);
@@ -101,7 +95,7 @@ static int os_commit(void *p, arena_size_t size, int with_large_pages) {
 }
 
 // release an reserved memory block
-static void os_release(void *p, arena_size_t size) {
+static void arena_os_release(void *p, arena_size_t size) {
 #ifdef ARENA_PLAT_UNIX
     munmap(p, size);
 #else
@@ -110,7 +104,7 @@ static void os_release(void *p, arena_size_t size) {
 #endif
 }
 
-static inline arena_size_t os_get_pagesize(void) {
+static inline arena_size_t arena_os_get_pagesize(void) {
 #ifdef ARENA_PLAT_UNIX
     return sysconf(_SC_PAGESIZE);
 #else
@@ -121,7 +115,7 @@ static inline arena_size_t os_get_pagesize(void) {
 #endif
 }
 
-static inline arena_size_t os_get_largepagesize(void) {
+static inline arena_size_t arena_os_get_largepagesize(void) {
 #ifdef ARENA_PLAT_UNIX
     // 2 MB is a safe value for Linux and most BSD systems
     return ARENA_MB(2);
@@ -135,17 +129,17 @@ arena_t *arena_new(arena_config_t *config) {
     arena_size_t pagesize, reserve, commit;
     int lp = config->flags & ARENA_LARGPAGES;
 
-    pagesize = (lp) ? os_get_largepagesize() : os_get_pagesize();
+    pagesize = (lp) ? arena_os_get_largepagesize() : arena_os_get_pagesize();
 
     // align reserve and commit fields by operating system's page size
-    reserve = ALIGN_POW2(config->reserve, pagesize);
-    commit = ALIGN_POW2(config->commit, pagesize);
+    reserve = arena_align_pow2(config->reserve, pagesize);
+    commit = arena_align_pow2(config->commit, pagesize);
 
-    a = (arena_t*) os_reserve(reserve, lp);
+    a = (arena_t*) arena_os_reserve(reserve, lp);
     if (!a)
         return NULL;
-    if (!os_commit(a, commit, lp)) {
-        os_release(a, reserve);
+    if (!arena_os_commit(a, commit, lp)) {
+        arena_os_release(a, reserve);
         return NULL;
     }
 
@@ -176,13 +170,8 @@ void *arena_alloc_align(arena_t *arena, arena_size_t size, arena_size_t alignmen
 
     current = arena->current;
     raw = (unsigned char*)current + current->pos;
-    aligned = (unsigned char*) ALIGN_POW2(raw, alignment);
+    aligned = (unsigned char*) arena_align_pow2(raw, alignment);
     padding = aligned - raw;
-
-    // if ARENA_STACK is set, include allocation header (metadata) in
-    // required_space
-    // if (current->config.flags & ARENA_STACK)
-    //     required_space += ahs;
 
     if ((size + padding) > (current->reserved - current->pos)) {
         if (current->config.flags & ARENA_FIXED)
@@ -198,17 +187,9 @@ void *arena_alloc_align(arena_t *arena, arena_size_t size, arena_size_t alignmen
         // reinitialize allocation info
         current = new_arena;
         raw = (unsigned char*)current + current->pos;
-        aligned = (unsigned char*) ALIGN_POW2(raw, alignment);
+        aligned = (unsigned char*) arena_align_pow2(raw, alignment);
         padding = aligned - raw;
     }
-
-    // if (current->config.flags & ARENA_STACK) {
-    //     // Store allocation metadata AFTER the allocated block
-    //     hdr = (allochdr_t*)(aligned + size);
-    //     hdr->size = size;
-    //     hdr->padding = padding;
-    //     current->pos += ahs;
-    // }
     current->pos += size + padding;
 
     // commit new pages if needed
@@ -217,9 +198,9 @@ void *arena_alloc_align(arena_t *arena, arena_size_t size, arena_size_t alignmen
         // aligned by operating system's page size, the "commit" field is
         // divisible by "reserve" field. So we can divied the arena's buffer to
         // blocks with "commit" size each.
-        os_commit((unsigned char*)current + current->commited,
-                  current->config.commit,
-                  current->config.flags & ARENA_LARGPAGES);
+        arena_os_commit((unsigned char*)current + current->commited,
+                        current->config.commit,
+                        current->config.flags & ARENA_LARGPAGES);
         current->commited += current->config.commit;
     }
 
@@ -238,7 +219,7 @@ void arena_pop_to(arena_t *arena, arena_size_t pos) {
     arena_t *current = arena->current, *prev = NULL;
     while (current->pos_base > pos) {
         prev = current->prev;
-        os_release(current, current->reserved);
+        arena_os_release(current, current->reserved);
         current = prev;
     }
     arena->current = current;
@@ -251,12 +232,6 @@ void arena_pop(arena_t *arena, arena_size_t offset) {
 
     arena_size_t pos_curr = arena_pos(arena);
 
-    // if (arena->config.flags & ARENA_STACK) {
-    //     current = arena->current;
-    //     offset = ahs;
-    //     hdr = *(allochdr_t*) &current->buf[pos_curr - ahs];
-    //     offset += hdr.size + hdr.padding;
-    // }
     if (offset <= pos_curr)
         arena_pop_to(arena, pos_curr - offset);
 }
@@ -272,7 +247,7 @@ void arena_destroy(arena_t *arena) {
     current = arena->current;
     while (current) {
         prev = current->prev;
-        os_release(current, current->reserved);
+        arena_os_release(current, current->reserved);
         current = prev;
     }
 }
