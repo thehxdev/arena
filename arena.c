@@ -106,7 +106,7 @@ static void arena_os_release(void *p, arena_size_t size) {
 
 static inline arena_size_t arena_os_get_pagesize(void) {
 #ifdef ARENA_PLAT_UNIX
-    return sysconf(_SC_PAGESIZE);
+    return ((arena_size_t) sysconf(_SC_PAGESIZE));
 #else
     SYSTEM_INFO sysinfo;
     memset(&sysinfo, 0, sizeof(sysinfo));
@@ -171,7 +171,7 @@ void *arena_alloc_align(arena_t *arena, arena_size_t size, arena_size_t alignmen
     current = arena->current;
     raw = (unsigned char*)current + current->pos;
     aligned = (unsigned char*) arena_align_pow2(raw, alignment);
-    padding = aligned - raw;
+    padding = (arena_uintptr_t)aligned - (arena_uintptr_t)raw;
 
     if ((size + padding) > (current->reserved - current->pos)) {
         if (current->config.flags & ARENA_FIXED)
@@ -188,7 +188,7 @@ void *arena_alloc_align(arena_t *arena, arena_size_t size, arena_size_t alignmen
         current = new_arena;
         raw = (unsigned char*)current + current->pos;
         aligned = (unsigned char*) arena_align_pow2(raw, alignment);
-        padding = aligned - raw;
+        padding = (arena_uintptr_t)aligned - (arena_uintptr_t)raw;
     }
     current->pos += size + padding;
 
