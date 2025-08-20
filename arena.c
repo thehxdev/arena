@@ -11,10 +11,10 @@
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -118,13 +118,13 @@ static inline arena_size_t arena_os_get_pagesize(void) {
 static inline arena_size_t arena_os_get_largepagesize(void) {
 #ifdef ARENA_PLAT_UNIX
     // 2 MB is a safe value for Linux and most BSD systems
-    return ARENA_MB(2);
+    return ARENA_MB(2ULL);
 #else
     return GetLargePageMinimum();
 #endif
 }
 
-arena_t *arena_new(arena_config_t *config) {
+arena_t *arena_new(const arena_config_t *config) {
     arena_t *a;
     arena_size_t pagesize, reserve, commit;
     int lp = config->flags & ARENA_LARGPAGES;
