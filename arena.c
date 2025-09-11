@@ -90,7 +90,7 @@ static int arena_os_commit(void *p, arena_size_t size, int with_large_pages) {
 #else
     if (with_large_pages)
         return 1;
-    return (VirtualAlloc(ptr, size, MEM_COMMIT, PAGE_READWRITE) != 0);
+    return (VirtualAlloc(p, size, MEM_COMMIT, PAGE_READWRITE) != 0);
 #endif
 }
 
