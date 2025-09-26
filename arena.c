@@ -160,7 +160,6 @@ arena_t *arena_new(const arena_config_t *config) {
 }
 
 void *arena_alloc_align(arena_t *arena, arena_size_t size, arena_size_t alignment) {
-    // allochdr_t *hdr;
     unsigned char *raw, *aligned;
     arena_t *current, *new_arena;
     arena_size_t padding;
@@ -227,9 +226,6 @@ void arena_pop_to(arena_t *arena, arena_size_t pos) {
 }
 
 void arena_pop(arena_t *arena, arena_size_t offset) {
-    // allochdr_t hdr;
-    // arena_t *current;
-
     arena_size_t pos_curr = arena_pos(arena);
 
     if (offset <= pos_curr)
