@@ -1,3 +1,6 @@
 a.out
 compile_flags.txt
 *.o
+*.obj
+*.exe
+*.vs
