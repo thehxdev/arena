@@ -87,7 +87,7 @@ typedef struct arena_scope {
         .flags = ARENA_NONE \
     })
 
-arena_t *arena_new(const arena_config_t *config);
+arena_t *arena_new(arena_config_t *config);
 
 void arena_destroy(arena_t *arena);
 
