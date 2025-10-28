@@ -87,7 +87,7 @@ typedef struct arena_scope {
         .flags = ARENA_NONE \
     })
 
-arena_t *arena_new(arena_config_t *config);
+arena_t *arena_new(const arena_config_t *config);
 
 void arena_destroy(arena_t *arena);
 
@@ -100,10 +100,10 @@ void *arena_alloc_align(arena_t *arena, arena_size_t size, arena_size_t alignmen
     arena_alloc_align((arena), (size), (arena)->config.alignment)
 
 // Is arena empty?
-int arena_is_empty(arena_t *arena);
+int arena_is_empty(const arena_t *arena);
 
 // Get total bytes allocated
-arena_size_t arena_pos(arena_t *arena);
+arena_size_t arena_pos(const arena_t *arena);
 
 // Set arena's position to a position specified by pos
 void arena_pop_to(arena_t *arena, arena_size_t pos);

@@ -124,7 +124,7 @@ static inline arena_size_t arena_os_get_largepagesize(void) {
 #endif
 }
 
-arena_t *arena_new(arena_config_t *config) {
+arena_t *arena_new(const arena_config_t *config) {
     arena_t *a;
     arena_size_t pagesize, reserve, commit;
     int lp = config->flags & ARENA_LARGPAGES;
@@ -206,11 +206,11 @@ void *arena_alloc_align(arena_t *arena, arena_size_t size, arena_size_t alignmen
     return aligned;
 }
 
-arena_size_t arena_pos(arena_t *arena) {
+arena_size_t arena_pos(const arena_t *arena) {
     return (arena->current->pos_base + arena->current->pos);
 }
 
-int arena_is_empty(arena_t *arena) {
+int arena_is_empty(const arena_t *arena) {
     return ((arena->current->prev == NULL) && (arena->pos == 0));
 }
 
