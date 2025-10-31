@@ -216,6 +216,8 @@ int arena_is_empty(const arena_t *arena) {
 
 void arena_pop_to(arena_t *arena, arena_size_t pos) {
     arena_t *current = arena->current, *prev = NULL;
+    if (pos < sizeof(*arena))
+        pos += sizeof(*arena);
     while (current->pos_base > pos) {
         prev = current->prev;
         arena_os_release(current, current->reserved);
@@ -226,16 +228,13 @@ void arena_pop_to(arena_t *arena, arena_size_t pos) {
 }
 
 void arena_pop(arena_t *arena, arena_size_t offset) {
-    arena_size_t pos_curr = arena_pos(arena);
-
-    if (offset <= pos_curr)
-        arena_pop_to(arena, pos_curr - offset);
+    arena_size_t curr_pos = arena_pos(arena);
+    if (offset <= curr_pos)
+        arena_pop_to(arena, curr_pos - offset);
 }
 
 void arena_reset(arena_t *arena) {
     arena_pop_to(arena, 0);
-    arena->current->pos = 0;
-    arena->current->prev = NULL;
 }
 
 void arena_destroy(arena_t *arena) {
