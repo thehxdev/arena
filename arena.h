@@ -69,7 +69,7 @@ typedef struct arena {
 // restore the old state.
 typedef struct arena_scope {
     arena_t *arena;
-    arena_size_t __pos; // read-only
+    arena_size_t pos; // read-only
 } arena_scope_t;
 
 #define ARENA_KB(value) ((value) * 1024)
@@ -120,7 +120,7 @@ void arena_reset(arena_t *arena);
 void arena_scope_begin(arena_t *arena, arena_scope_t *scope_out);
 
 // Restore an arena's state from an snapshot.
-void arena_scope_end(arena_scope_t scope);
+void arena_scope_end(arena_scope_t *scope);
 
 #ifdef __cplusplus
 }
