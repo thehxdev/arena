@@ -6,8 +6,12 @@ int main(void) {
     arena_t *a;
     long *p, *z;
 
-    arena_config_t arena_config = ARENA_DEFAULT_CONFIG;
+    printf("Arena version %d.%d.%d\n",
+           ARENA_VERSION_MAJOR,
+           ARENA_VERSION_MINOR,
+           ARENA_VERSION_PATCH);
 
+    arena_config_t arena_config = ARENA_DEFAULT_CONFIG;
     if (! (a = arena_new(&arena_config))) {
         perror("arena");
         return 1;
@@ -19,9 +23,11 @@ int main(void) {
     arena_pop(a, sizeof(*p));
 
     z = (long*) arena_alloc(a, sizeof(*z));
-    printf("value = %ld\n", *p);
 
     assert(p == z);
+    assert(*p == 111);
+
     arena_destroy(a);
+    puts("OK!");
     return 0;
 }

@@ -34,6 +34,10 @@ extern "C" {
 #include <stddef.h>
 #include <stdint.h>
 
+#define ARENA_VERSION_MAJOR 0
+#define ARENA_VERSION_MINOR 1
+#define ARENA_VERSION_PATCH 0
+
 typedef size_t arena_size_t;
 
 #define ARENA_KB(value) ((value) * 1024)
