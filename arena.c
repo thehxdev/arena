@@ -72,7 +72,7 @@ __arena_static_assert((sizeof(arena_t) <= ARENA_HEADER_SIZE), validate_arena_hea
 #endif
 
 // ask operating system for memory
-static void *arena_os_reserve(arena_size_t size, int with_large_pages) {
+static void *arena_os_mem_reserve(arena_size_t size, int with_large_pages) {
     void *p; int wlp;
 #ifdef ARENA_PLAT_UNIX
     wlp = (with_large_pages) ? MAP_HUGETLB : 0;
@@ -87,7 +87,7 @@ static void *arena_os_reserve(arena_size_t size, int with_large_pages) {
 }
 
 // commit a page (prepare it for read/write)
-static int arena_os_commit(void *p, arena_size_t size, int with_large_pages) {
+static int arena_os_mem_commit(void *p, arena_size_t size, int with_large_pages) {
 #ifdef ARENA_PLAT_UNIX
     (void)with_large_pages;
     return (mprotect(p, size, PROT_READ | PROT_WRITE) == 0);
@@ -99,7 +99,7 @@ static int arena_os_commit(void *p, arena_size_t size, int with_large_pages) {
 }
 
 // release an reserved memory block
-static void arena_os_release(void *p, arena_size_t size) {
+static void arena_os_mem_release(void *p, arena_size_t size) {
 #ifdef ARENA_PLAT_UNIX
     munmap(p, size);
 #else
@@ -139,12 +139,12 @@ arena_t *arena_new(const arena_config_t *config) {
     reserve = arena_align_pow2(config->reserve, pagesize);
     commit = arena_align_pow2(config->commit, pagesize);
 
-    a = (arena_t*) arena_os_reserve(reserve, lp);
+    a = (arena_t*) arena_os_mem_reserve(reserve, lp);
     if (!a)
         return NULL;
 
-    if (!arena_os_commit(a, commit, lp)) {
-        arena_os_release(a, reserve);
+    if (!arena_os_mem_commit(a, commit, lp)) {
+        arena_os_mem_release(a, reserve);
         return NULL;
     }
 
@@ -199,9 +199,9 @@ void *arena_alloc_align(arena_t *arena, arena_size_t size, arena_size_t alignmen
         // aligned by operating system's page size, the "commit" field is
         // divisible by "reserve" field. So we can divied the arena's buffer to
         // blocks with "commit" size each.
-        arena_os_commit((unsigned char*)current + current->commited,
-                        current->config.commit,
-                        current->config.flags & ARENA_LARGPAGES);
+        arena_os_mem_commit((unsigned char*)current + current->commited,
+                            current->config.commit,
+                            current->config.flags & ARENA_LARGPAGES);
         current->commited += current->config.commit;
     }
 
@@ -224,7 +224,7 @@ void arena_pop_to(arena_t *arena, arena_size_t pos) {
     pos = (pos > ARENA_HEADER_SIZE) ? pos : ARENA_HEADER_SIZE;
     while (current->pos_base >= pos) {
         prev = current->prev;
-        arena_os_release(current, current->reserved);
+        arena_os_mem_release(current, current->reserved);
         current = prev;
     }
     current->prev = NULL;
@@ -249,7 +249,7 @@ void arena_destroy(arena_t *arena) {
     current = arena->current;
     while (current) {
         prev = current->prev;
-        arena_os_release(current, current->reserved);
+        arena_os_mem_release(current, current->reserved);
         current = prev;
     }
 }
