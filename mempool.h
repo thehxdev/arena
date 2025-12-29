@@ -5,12 +5,14 @@
 extern "C" {
 #endif
 
-typedef union __mempool_chunk __mempool_chunk_t;
+union __mempool_node {
+    union __mempool_node *next;
+};
 
-typedef struct mempool {
+typedef struct {
     arena_t *arena;
-    __mempool_chunk_t *freelist;
-    size_t chunk_size;
+    union __mempool_node *list;
+    size_t size;
 } mempool_t;
 
 void mempool_init(mempool_t *self, arena_t *arena, size_t chunk_size);
