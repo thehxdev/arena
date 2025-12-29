@@ -201,10 +201,13 @@ void *arena_alloc_align(arena_t *arena, arena_size_t size, arena_size_t alignmen
         // aligned by operating system's page size, the "commit" field is
         // divisible by "reserve" field. So we can divied the arena's buffer to
         // blocks with "commit" size each.
+        size_t must_commit = current->commited;
+        while (must_commit < pos_past)
+            must_commit += current->config.commit;
         arena_os_mem_commit((unsigned char*)current + current->commited,
-                            current->config.commit,
+                            must_commit,
                             current->config.flags & ARENA_LARGPAGES);
-        current->commited += current->config.commit;
+        current->commited = must_commit;
     }
 
     current->pos = pos_past;
